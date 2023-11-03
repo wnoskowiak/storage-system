@@ -53,7 +53,7 @@ public final class SingleCycle {
         transferer.add(new Thread(new Runnable() {
             @Override
             public void run() {
-                sleep(10);
+                sleep(1000);
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
                 executeTransfer(system, 101, 1, 2, 20);
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");

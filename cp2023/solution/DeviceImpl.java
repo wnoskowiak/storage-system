@@ -13,7 +13,11 @@ public class DeviceImpl {
     private final StorageSystemImpl system;
     private final Set<ComponentId> memory;
     private final Set<ComponentId> reservations = new HashSet<ComponentId>();
+    private final Set<ComponentId> leaving = new HashSet<ComponentId>();
     private final TransferManager outgoing = new TransferManager();
+
+    
+    private final Semaphore leavingMutex = new Semaphore(1, true);
     private final Semaphore memoryMutex = new Semaphore(1, true);
     private final Semaphore outgoingMutex = new Semaphore(1, true);
     private final Semaphore reservationsMutex = new Semaphore(1, true);
@@ -67,6 +71,8 @@ public class DeviceImpl {
         public synchronized void remove(ComponentId elem, boolean deletion) throws InterruptedException {
             memoryMutex.acquire();
             outgoingMutex.acquire();
+            leavingMutex.acquire();
+
 
             if (deletion) {
                 system.acquireMutex();
@@ -74,6 +80,7 @@ public class DeviceImpl {
 
             memory.remove(elem);
             outgoing.removeTransfer(elem);
+            leaving.remove(elem);
 
             if (deletion) {
                 system.removeComponents(elem);
@@ -81,6 +88,7 @@ public class DeviceImpl {
 
             memoryMutex.release();
             outgoingMutex.release();
+            leavingMutex.release();
             if (deletion) {
                 system.releaseMutex();
             }
@@ -109,15 +117,26 @@ public class DeviceImpl {
 
     }
 
+    public void markAsOutgoing(ComponentId comp, DeviceId dest) throws InterruptedException {
+
+
+            outgoingMutex.acquire();
+
+            outgoing.addTransfer(comp, dest);
+
+            outgoingMutex.release();
+
+    }
+
     public class ArriveOrReserve {
 
         public synchronized void release(ComponentId elem, DeviceId dev, boolean addition) throws InterruptedException {
 
-            outgoingMutex.acquire();
+            leavingMutex.acquire();
 
-            outgoing.addTransfer(elem, dev);
+            leaving.add(elem);
 
-            outgoingMutex.release();
+            leavingMutex.release();
 
             System.out.println("===== " + Thread.currentThread().getId() + " has sent a notify"
                     + " ===");
@@ -129,13 +148,13 @@ public class DeviceImpl {
         public synchronized void reserve(ComponentId elem, boolean addition) throws InterruptedException {
 
             reservationsMutex.acquire();
-            outgoingMutex.acquire();
+            leavingMutex.acquire();
             memoryMutex.acquire();
 
-            if (numberOfSlots - memory.size() + outgoing.size() - reservations.size() <= 0) {
+            if (numberOfSlots - memory.size() + leaving.size() - reservations.size() <= 0) {
 
                 reservationsMutex.release();
-                outgoingMutex.release();
+                leavingMutex.release();
                 memoryMutex.release();
 
                 boolean isCycle = false;
@@ -180,7 +199,6 @@ public class DeviceImpl {
                 if (!isCycle) {
                     System.out.println("===== " + Thread.currentThread().getId() + " is waiting"
                             + " ===");
-                    // System.out.println(this.id.toString());
                     wait();
                     System.out.println("===== " + Thread.currentThread().getId() + " is going"
                             + " ===");
@@ -190,7 +208,7 @@ public class DeviceImpl {
                 }
 
                 reservationsMutex.acquire();
-                outgoingMutex.acquire();
+                leavingMutex.acquire();
                 memoryMutex.acquire();
 
             }
@@ -207,7 +225,7 @@ public class DeviceImpl {
             }
 
             reservationsMutex.release();
-            outgoingMutex.release();
+            leavingMutex.release();
             memoryMutex.release();
 
         }

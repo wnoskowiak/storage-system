@@ -212,7 +212,8 @@ public class StorageSystemImpl implements StorageSystem {
                     break;
 
                 case TRANSFER:
-                
+                    
+                    sourceDev.markAsOutgoing(comp, destDev.id);
                     // Rezerwujemy miejsce na urządzeniu
                     destDev.arriveOrReserve.reserve(comp, false);
                     // informujemy inne wątki że można zaczynać
