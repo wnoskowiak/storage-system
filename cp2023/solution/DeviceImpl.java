@@ -19,6 +19,8 @@ public class DeviceImpl {
     private final HashMap<DeviceId, Integer> skippers = new HashMap<DeviceId, Integer>();
     private final TransferManager outgoing = new TransferManager();
 
+    private Integer queueLength = 0;
+
     private final Semaphore leavingMutex = new Semaphore(1, true);
     private final Semaphore memoryMutex = new Semaphore(1, true);
     private final Semaphore outgoingMutex = new Semaphore(1, true);
@@ -28,7 +30,9 @@ public class DeviceImpl {
     public final AddOrRemove addOrRemove = new AddOrRemove();
 
     public DeviceImpl(DeviceId id, int numberOfSlots, Set<ComponentId> initialComponentIds, StorageSystemImpl system) {
-
+        if(numberOfSlots <= 0) {
+            throw new IllegalArgumentException();
+        }
         this.numberOfSlots = numberOfSlots;
         this.system = system;
         this.id = id;
@@ -194,8 +198,8 @@ public class DeviceImpl {
             leavingMutex.release();
 
             if (!removeSkipper(dev)) {
-                System.out.println("===== " + Thread.currentThread().getId() + " has sent a notify"
-                        + " ===");
+                System.out.println("===== " + Thread.currentThread().getId() + " has sent a notify on device "
+                        + id  + " ===");
                 notify();
             }
         }
@@ -207,20 +211,21 @@ public class DeviceImpl {
             leavingMutex.acquire();
             memoryMutex.acquire();
 
+            System.out.println("=====  ja " + Thread.currentThread().getId() + " numberOfSlots " + numberOfSlots
+                    + " memory.size() " + memory.size() + " leaving.size() " + leaving.size() + " reservations.size() "
+                    + reservations.size());
+
             if (numberOfSlots - memory.size() + leaving.size() - reservations.size() <= 0) {
 
                 reservationsMutex.release();
                 leavingMutex.release();
                 memoryMutex.release();
 
-                if (!addition) {
-                    source.markAsOutgoing(elem, id);
-                }
-
                 boolean isCycle = false;
                 Map<DeviceId, DeviceId> nextMap = new HashMap<DeviceId, DeviceId>();
 
                 if (!addition) {
+                    source.markAsOutgoing(elem, id);
                     Set<DeviceId> visited = new HashSet<DeviceId>();
 
                     Set<DeviceImpl> temp = new HashSet<DeviceImpl>();
@@ -285,10 +290,14 @@ public class DeviceImpl {
 
             }
 
-            else {
-                System.out.println("===== " + Thread.currentThread().getId() + " no i chuj no i cześć"
-                        + " ===");
-            }
+            // else {
+            // System.out.println("===== " + Thread.currentThread().getId() + " no i chuj no
+            // i cześć"
+            // + " ===");
+            // }
+
+            System.out.println("===== " + Thread.currentThread().getId() + " got a reservation"
+                    + " ===");
 
             if (addition) {
                 system.acquireMutex();
