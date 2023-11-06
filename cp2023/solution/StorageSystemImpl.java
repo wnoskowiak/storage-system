@@ -201,7 +201,7 @@ public class StorageSystemImpl implements StorageSystem {
                 case INSERT:
 
                     // Rezerwujemy miejsce na urządzeniu
-                    destDev.arriveOrReserve.reserve(comp, true);
+                    destDev.arriveOrReserve.reserve(comp, null, true);
                     // rozpoczynamy transfer
                     transfer.prepare();
                     // Zajmujemy miejsce na dysku
@@ -213,11 +213,11 @@ public class StorageSystemImpl implements StorageSystem {
 
                 case TRANSFER:
                     
-                    sourceDev.markAsOutgoing(comp, destDev.id);
+                    // sourceDev.markAsOutgoing(comp, destDev.id);
                     // Rezerwujemy miejsce na urządzeniu
-                    destDev.arriveOrReserve.reserve(comp, false);
+                    destDev.arriveOrReserve.reserve(comp, sourceDev, false);
                     // informujemy inne wątki że można zaczynać
-                    sourceDev.arriveOrReserve.release(comp, null, false);
+                    sourceDev.arriveOrReserve.release(comp, destDev.id, false);
                     // rozpoczynamy transfer
                     transfer.prepare();
                     // Usuwamy element
