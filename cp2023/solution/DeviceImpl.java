@@ -20,6 +20,7 @@ public class DeviceImpl {
     private final TransferManager outgoing = new TransferManager();
 
     private Integer queueLength = 0;
+    private Integer free = 0;
 
     private final Semaphore leavingMutex = new Semaphore(1, true);
     private final Semaphore memoryMutex = new Semaphore(1, true);
@@ -30,7 +31,7 @@ public class DeviceImpl {
     public final AddOrRemove addOrRemove = new AddOrRemove();
 
     public DeviceImpl(DeviceId id, int numberOfSlots, Set<ComponentId> initialComponentIds, StorageSystemImpl system) {
-        if(numberOfSlots <= 0) {
+        if (numberOfSlots <= 0) {
             throw new IllegalArgumentException();
         }
         this.numberOfSlots = numberOfSlots;
@@ -40,6 +41,8 @@ public class DeviceImpl {
         if (initialComponentIds != null) {
             memory.addAll(initialComponentIds);
         }
+
+        free = numberOfSlots - memory.size();
 
     }
 
@@ -191,35 +194,37 @@ public class DeviceImpl {
 
         public synchronized void release(ComponentId elem, DeviceId dev, boolean addition) throws InterruptedException {
 
-            leavingMutex.acquire();
-
-            leaving.add(elem);
-
-            leavingMutex.release();
-
-            if (!removeSkipper(dev)) {
-                System.out.println("===== " + Thread.currentThread().getId() + " has sent a notify on device "
-                        + id  + " ===");
-                notify();
+            if (queueLength == 0) {
+                free++;
+            } else {
+                if (!removeSkipper(dev)) {
+                    System.out.println("===== " + Thread.currentThread().getId() + " has sent a notify on device "
+                            + id + " ===");
+                    notify();
+                }
             }
+            // leavingMutex.acquire();
+
+            // leaving.add(elem);
+
+            // leavingMutex.release();
+
+            // if (!removeSkipper(dev)) {
+            // System.out.println("===== " + Thread.currentThread().getId() + " has sent a
+            // notify on device "
+            // + id + " ===");
+            // notify();
+            // }
         }
 
         public synchronized void reserve(ComponentId elem, DeviceImpl source, boolean addition)
                 throws InterruptedException {
 
-            reservationsMutex.acquire();
-            leavingMutex.acquire();
-            memoryMutex.acquire();
-
             System.out.println("=====  ja " + Thread.currentThread().getId() + " numberOfSlots " + numberOfSlots
                     + " memory.size() " + memory.size() + " leaving.size() " + leaving.size() + " reservations.size() "
                     + reservations.size());
 
-            if (numberOfSlots - memory.size() + leaving.size() - reservations.size() <= 0) {
-
-                reservationsMutex.release();
-                leavingMutex.release();
-                memoryMutex.release();
+            if (free == 0) {
 
                 boolean isCycle = false;
                 Map<DeviceId, DeviceId> nextMap = new HashMap<DeviceId, DeviceId>();
@@ -272,29 +277,24 @@ public class DeviceImpl {
                 if (!isCycle) {
                     System.out.println("===== " + Thread.currentThread().getId() + " is waiting"
                             + " ===");
+                    queueLength++;
                     wait();
+                    queueLength--;
                     System.out.println("===== " + Thread.currentThread().getId() + " is going"
                             + " ===");
                 } else {
 
                     addSkipper(nextMap.get(id));
 
-                    System.out.println("=====  ja " + id.toString() + " dodaję siebie do " + nextMap.get(id).toString()
-                            + " ===");
+                    System.out.println(
+                            "=====  ja " + id.toString() + " dodaję siebie do " + nextMap.get(id).toString()
+                                    + " ===");
 
                 }
 
-                reservationsMutex.acquire();
-                leavingMutex.acquire();
-                memoryMutex.acquire();
-
+            } else {
+                free--;
             }
-
-            // else {
-            // System.out.println("===== " + Thread.currentThread().getId() + " no i chuj no
-            // i cześć"
-            // + " ===");
-            // }
 
             System.out.println("===== " + Thread.currentThread().getId() + " got a reservation"
                     + " ===");
@@ -302,18 +302,8 @@ public class DeviceImpl {
             if (addition) {
                 system.acquireMutex();
                 system.addComponent(elem);
-            }
-
-            reservations.add(elem);
-
-            if (addition) {
                 system.releaseMutex();
             }
-
-            reservationsMutex.release();
-            leavingMutex.release();
-            memoryMutex.release();
-
         }
     }
 }
