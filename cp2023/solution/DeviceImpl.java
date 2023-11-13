@@ -348,8 +348,9 @@ public class DeviceImpl {
             stateMutex.acquire();
             if (free > 0) {
                 free--;
-                TransferMutexWrapper result = new TransferMutexWrapper(null, new Semaphore(1), new Semaphore(1));
+                TransferMutexWrapper result = new TransferMutexWrapper(new LinkedListWrapper(null), new Semaphore(1), new Semaphore(1));
                 stateMutex.release();
+                // System.out.println("Transferer " + Thread.currentThread().getId() + " 1");
                 return result;
             } else {
                 // tu trzeba sprawdzić czy cykl istnieje
@@ -357,9 +358,11 @@ public class DeviceImpl {
                 if (cycle != null) {
                     // tu robimy rozcyklowywanie
                     NewQueueElement qElem = queue.put(comp);
+                    cycle.add(comp);
                     TransferMutexWrapper result = new TransferMutexWrapper(new LinkedListWrapper(cycle), new Semaphore(1),
                             qElem.doneWithPrepare);
                     stateMutex.release();
+                    // System.out.println("Transferer " + Thread.currentThread().getId() + " 2");
                     return result;
                 } else {
                     NewQueueElement qElem = queue.put(comp);
@@ -367,6 +370,7 @@ public class DeviceImpl {
                     TransferMutexWrapper result = new TransferMutexWrapper(qElem.cycleRemainders,
                             qElem.waitForCondition, qElem.doneWithPrepare);
                     stateMutex.release();
+                    // System.out.println("Transferer " + Thread.currentThread().getId() + " 3 " + qElem.cycleRemainders);
                     return result;
                 }
             }

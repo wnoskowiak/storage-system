@@ -6,6 +6,6 @@ public class NewQueueElement {
 
     public final Semaphore waitForCondition = new Semaphore(0);
     public final Semaphore doneWithPrepare = new Semaphore(0);
-    public LinkedListWrapper cycleRemainders;
+    public LinkedListWrapper cycleRemainders = new LinkedListWrapper(null);
     
 }
