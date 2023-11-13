@@ -2,6 +2,8 @@ package cp2023.solution;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
@@ -36,11 +38,13 @@ enum operation {
 
 public class StorageSystemImpl implements StorageSystem {
 
+    private final Semaphore checkConditions = new Semaphore(1);
+
     private final Map<DeviceId, DeviceImpl> devices;
     private final Set<ComponentId> components;
     private final Semaphore componentMutex = new Semaphore(1, true);
     private final Set<ComponentId> underTransfer = new HashSet<ComponentId>();
-    private final Semaphore underTransferMutex = new Semaphore(1, true);
+    // private final Semaphore underTransferMutex = new Semaphore(1, true);
 
     public StorageSystemImpl(Map<DeviceId, Integer> deviceTotalSlots,
             Map<ComponentId, DeviceId> componentPlacement) {
@@ -72,10 +76,10 @@ public class StorageSystemImpl implements StorageSystem {
 
     }
 
-    public Set<DeviceImpl> getDevices(Set<DeviceId> ids) {
-        Set<DeviceImpl> result = new HashSet<DeviceImpl>();
+    public Map<DeviceId, DeviceImpl> getDevices(Set<DeviceId> ids) {
+        Map<DeviceId, DeviceImpl> result = new HashMap<DeviceId, DeviceImpl>();
         for (DeviceId elem : ids) {
-            result.add(devices.get(elem));
+            result.put(elem, devices.get(elem));
         }
         return result;
     }
@@ -126,26 +130,31 @@ public class StorageSystemImpl implements StorageSystem {
 
             // Jeśli podano cel to sprawdzamy czy istnieje
             if (transfer.getDestinationDeviceId() != null && !devices.containsKey(transfer.getDestinationDeviceId())) {
+
                 throw new DeviceDoesNotExist(transfer.getDestinationDeviceId());
             }
+
+            checkConditions.acquire();
 
             // sprawdzamy czy element musi być transferowany
             if (transfer.getDestinationDeviceId() != null) {
                 DeviceImpl sourceDev = devices.get(transfer.getDestinationDeviceId());
                 if (sourceDev.doIHave(comp)) {
+                    checkConditions.release();
                     throw new ComponentDoesNotNeedTransfer(comp,
                             transfer.getDestinationDeviceId());
                 }
             }
 
-            // sprawdzamy czy transfer dla komponentu został już zgłoczony
-            underTransferMutex.acquire();
+            // sprawdzamy czy transfer dla komponentu został już zgłoszony
+            // underTransferMutex.acquire();
             if (underTransfer.contains(comp)) {
-                underTransferMutex.release();
+                // underTransferMutex.release();
+                checkConditions.release();
                 throw new ComponentIsBeingOperatedOn(comp);
             }
             underTransfer.add(comp);
-            underTransferMutex.release();
+            // underTransferMutex.release();
 
             operation opType;
             DeviceImpl sourceDev = devices.getOrDefault(transfer.getSourceDeviceId(), null);
@@ -161,84 +170,210 @@ public class StorageSystemImpl implements StorageSystem {
 
             if (opType == operation.DELETE || opType == operation.TRANSFER) {
                 if (!sourceDev.doIHave(comp)) {
+                    checkConditions.release();
                     throw new ComponentDoesNotExist(comp, sourceDev.id);
                 }
             }
 
             if (opType == operation.INSERT) {
-                componentMutex.acquire();
+                // componentMutex.acquire();
                 if (components.contains(comp)) {
-                    componentMutex.release();
+                    // componentMutex.release();
+                    checkConditions.release();
                     throw new ComponentAlreadyExists(comp);
                 }
-                componentMutex.release();
+                // componentMutex.release();
             }
 
             if (opType == operation.TRANSFER) {
 
-                componentMutex.acquire();
+                // componentMutex.acquire();
                 if (destDev.doIHave(comp)) {
-                    componentMutex.release();
+                    // componentMutex.release();
+                    checkConditions.release();
                     throw new ComponentDoesNotNeedTransfer(comp, destDev.id);
                 }
-                componentMutex.release();
+                // componentMutex.release();
             }
 
             switch (opType) {
                 case DELETE:
 
-                    // informujemy inne wątki że można zaczynać
-                    sourceDev.arriveOrReserve.release(comp, null, false);
+                    // Wiemy że delete wykonuje się zawsze, więc warunki bezpieczeństwa na pewno
+                    // zostały spełnione
+                    checkConditions.release();
+                    // informujemy inny wątek że można zaczynać
+                    Semaphore deleteDonePreparing = sourceDev.arriveOrReserve.releaseOldest();
                     // przygotowywujemy transfer
                     transfer.prepare();
-                    // Usuwamy element
-                    sourceDev.addOrRemove.remove(comp, true);
+                    // informujemy czekający wątek że wykonaliśmy prepare
+                    deleteDonePreparing.release();
                     // Wykonujemy transfer
                     transfer.perform();
+                    // Usuwamy element zurządzenia
+                    sourceDev.addOrRemove.remove(comp);
+                    // Usuwamy element z systemu
+                    components.remove(comp);
 
                     break;
 
                 case INSERT:
 
                     // Rezerwujemy miejsce na urządzeniu
-                    destDev.arriveOrReserve.reserve(comp, null, true);
+                    AdditionMutexWrapper insertMutexes = destDev.arriveOrReserve.reserveForAddition(comp);
+                    // teraz już wiemy że poprawność musi zostać zachowana, więc zwalniamy
+                    checkConditions.release();
+                    // czekamy aż będziemy w stanie rozpocząć transfer
+                    insertMutexes.canStartPrep.acquire();
                     // rozpoczynamy transfer
                     transfer.prepare();
-                    // Zajmujemy miejsce na dysku
-                    destDev.addOrRemove.add(comp, false);
+                    // czekamy aż będziemy mogli rozpocząć perform
+                    insertMutexes.canStartPerf.acquire();
                     // Przenosimy dane
                     transfer.perform();
+                    // Dodajemy element do urządzenia
+                    destDev.addOrRemove.add(comp);
+                    // Dodajemy element do systemu
+                    components.add(comp);
 
                     break;
 
                 case TRANSFER:
-                    
-                    // sourceDev.markAsOutgoing(comp, destDev.id);
+
+                    // tu trzeba będzie sprawdzić cykle
+
                     // Rezerwujemy miejsce na urządzeniu
-                    destDev.arriveOrReserve.reserve(comp, sourceDev, false);
-                    // informujemy inne wątki że można zaczynać
-                    sourceDev.arriveOrReserve.release(comp, destDev.id, false);
+                    TransferMutexWrapper transferMutexes = destDev.arriveOrReserve.reserveForTransfer(comp, sourceDev.id);
+                    // teraz już wiemy że poprawność musi zostać zachowana, więc zwalniamy
+                    checkConditions.release();
+                    // Czekamy aż będziemy mogli rozpocząć prepare
+                    transferMutexes.canStartPrep.acquire();
+                    // informujemy inny wątek że można zaczynać, z uwzględneniem cyklowania
+                    Semaphore transferDonePreparing;
+                    if(transferMutexes.cycleRemainder.list == null) {
+                        transferDonePreparing = sourceDev.arriveOrReserve.releaseOldest();
+                    }
+                    else {
+                        transferDonePreparing = sourceDev.arriveOrReserve.releaseSpecific(transferMutexes.cycleRemainder.list);
+                    }
                     // rozpoczynamy transfer
                     transfer.prepare();
-                    // Usuwamy element
-                    sourceDev.addOrRemove.remove(comp, false);
-                    // Zajmujemy miejsce na dysku
-                    destDev.addOrRemove.add(comp, false);
+                    // informujemy czekający wątek że wykonaliśmy prepare
+                    transferDonePreparing.release();
+                    // czekamy aż będziemy mogli rozpocząć perform
+                    transferMutexes.canStartPerf.acquire();
                     // Przenosimy dane
                     transfer.perform();
+                    // Usuwamy element zurządzenia
+                    sourceDev.addOrRemove.remove(comp);
+                    // Dodajemy element do urządzenia
+                    destDev.addOrRemove.add(comp);
+
+                    // // Rezerwujemy miejsce na urządzeniu
+                    // destDev.arriveOrReserve.reserve(comp, sourceDev, false);
+                    // // informujemy inne wątki że można zaczynać
+                    // sourceDev.arriveOrReserve.release(comp, destDev.id, false);
+                    // // rozpoczynamy transfer
+                    // transfer.prepare();
+                    // // Usuwamy element
+                    // sourceDev.addOrRemove.remove(comp, false);
+                    // // Zajmujemy miejsce na dysku
+                    // destDev.addOrRemove.add(comp, false);
+                    // // Przenosimy dane
+                    // transfer.perform();
 
                     break;
             }
 
-            underTransferMutex.acquire();
+            // underTransferMutex.acquire();
+            checkConditions.acquire();
             underTransfer.remove(comp);
-            underTransferMutex.release();
+            checkConditions.release();
 
         }
 
         catch (InterruptedException e) {
             throw new RuntimeException("panic: unexpected thread interruption");
         }
+
+    }
+
+    public LinkedList<ComponentId> lookForCycles(DeviceId source, DeviceId destination) throws InterruptedException {
+
+        Map<DeviceId, LinkedList<ComponentId>> nextMap = new HashMap<DeviceId, LinkedList<ComponentId>>();
+        
+        List<LinkedList<ComponentId>> foundCycles = new LinkedList<LinkedList<ComponentId>>();
+        Set<DeviceId> visited = new HashSet<DeviceId>();
+
+        DeviceImpl sourceDevice = devices.get(source);
+        Map<DeviceId, ComponentId> directions = sourceDevice.getDestinations();
+
+        for (DeviceId dev : directions.keySet()) {
+            LinkedList<ComponentId> path = new LinkedList<ComponentId>();
+            path.add(directions.get(dev));
+            nextMap.put(dev, path);
+        }
+
+        while (true) {
+
+            Map<DeviceId, LinkedList<ComponentId>> temp = new HashMap<DeviceId, LinkedList<ComponentId>>();
+
+            Map<DeviceId, DeviceImpl> devices = this.getDevices(nextMap.keySet());
+
+            for (DeviceId device : nextMap.keySet()) {
+
+                DeviceImpl dev = devices.get(device);
+
+                LinkedList<ComponentId> path = nextMap.get(device);
+
+                Map<DeviceId, ComponentId> destinations = dev.getDestinations();
+
+                for(DeviceId devi : destinations.keySet()) {
+
+                    LinkedList<ComponentId> newPath = new LinkedList<ComponentId>(path);
+
+                    newPath.add(destinations.get(devi));
+
+                    temp.put(devi, newPath);
+
+                }
+            }
+
+            Set<DeviceId> canReach = temp.keySet();
+
+            canReach.removeAll(visited);
+
+            if(canReach.isEmpty()) {
+                break;
+            }
+
+            if(canReach.contains(destination)) {
+
+                LinkedList<ComponentId> cycle = temp.get(destination);
+
+                foundCycles.add(cycle);
+
+                temp.remove(destination);
+
+                canReach.remove(destination);
+
+            }
+
+            visited.addAll(canReach);
+
+            nextMap = temp;
+
+        }
+
+        // TODO: tutaj należy dopisać wybieranie najstarszego z cykli, teraz wyjebane wybieram pierwszy
+
+        if(foundCycles.isEmpty()) {
+            return null;
+        }
+        else {
+            return foundCycles.get(0);
+        }
+
 
     }
 

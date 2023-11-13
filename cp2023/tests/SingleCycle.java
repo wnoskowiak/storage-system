@@ -48,7 +48,6 @@ public final class SingleCycle {
     }
     
     private final static Collection<Thread> setupTransferers(StorageSystem system) {
-        // FIXME: debug
         ArrayList<Thread> transferer = new ArrayList<>();
         transferer.add(new Thread(new Runnable() {
             @Override
