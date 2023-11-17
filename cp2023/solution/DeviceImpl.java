@@ -56,6 +56,10 @@ public class DeviceImpl {
         return queue.whatPos(comp);
     }
 
+    public DeviceId getMapping(ComponentId comp) throws InterruptedException {
+        return queue.getMapping(comp);
+    };
+
     public class AddOrRemove {
 
         public void remove(ComponentId elem) throws InterruptedException {

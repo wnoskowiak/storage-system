@@ -244,18 +244,19 @@ public class StorageSystemImpl implements StorageSystem {
                     // tu trzeba będzie sprawdzić cykle
 
                     // Rezerwujemy miejsce na urządzeniu
-                    TransferMutexWrapper transferMutexes = destDev.arriveOrReserve.reserveForTransfer(comp, sourceDev.id);
+                    TransferMutexWrapper transferMutexes = destDev.arriveOrReserve.reserveForTransfer(comp,
+                            sourceDev.id);
                     // teraz już wiemy że poprawność musi zostać zachowana, więc zwalniamy
                     checkConditions.release();
                     // Czekamy aż będziemy mogli rozpocząć prepare
                     transferMutexes.canStartPrep.acquire();
                     // informujemy inny wątek że można zaczynać, z uwzględneniem cyklowania
                     Semaphore transferDonePreparing;
-                    if(transferMutexes.cycleRemainder.list == null) {
+                    if (transferMutexes.cycleRemainder.list == null) {
                         transferDonePreparing = sourceDev.arriveOrReserve.releaseOldest();
-                    }
-                    else {
-                        transferDonePreparing = sourceDev.arriveOrReserve.releaseSpecific(transferMutexes.cycleRemainder.list);
+                    } else {
+                        transferDonePreparing = sourceDev.arriveOrReserve
+                                .releaseSpecific(transferMutexes.cycleRemainder.list);
                     }
                     // rozpoczynamy transfer
                     transfer.prepare();
@@ -270,23 +271,8 @@ public class StorageSystemImpl implements StorageSystem {
                     // Dodajemy element do urządzenia
                     destDev.addOrRemove.add(comp);
 
-                    // // Rezerwujemy miejsce na urządzeniu
-                    // destDev.arriveOrReserve.reserve(comp, sourceDev, false);
-                    // // informujemy inne wątki że można zaczynać
-                    // sourceDev.arriveOrReserve.release(comp, destDev.id, false);
-                    // // rozpoczynamy transfer
-                    // transfer.prepare();
-                    // // Usuwamy element
-                    // sourceDev.addOrRemove.remove(comp, false);
-                    // // Zajmujemy miejsce na dysku
-                    // destDev.addOrRemove.add(comp, false);
-                    // // Przenosimy dane
-                    // transfer.perform();
-
                     break;
             }
-
-            // underTransferMutex.acquire();
             checkConditions.acquire();
             underTransfer.remove(comp);
             checkConditions.release();
@@ -302,7 +288,7 @@ public class StorageSystemImpl implements StorageSystem {
     public LinkedList<ComponentId> lookForCycles(DeviceId source, DeviceId destination) throws InterruptedException {
 
         Map<DeviceId, LinkedList<ComponentId>> nextMap = new HashMap<DeviceId, LinkedList<ComponentId>>();
-        
+
         List<LinkedList<ComponentId>> foundCycles = new LinkedList<LinkedList<ComponentId>>();
         Set<DeviceId> visited = new HashSet<DeviceId>();
 
@@ -315,7 +301,7 @@ public class StorageSystemImpl implements StorageSystem {
             nextMap.put(dev, path);
         }
 
-        if(nextMap.keySet().contains(destination)) {
+        if (nextMap.keySet().contains(destination)) {
             foundCycles.add(nextMap.get(destination));
         }
 
@@ -325,7 +311,6 @@ public class StorageSystemImpl implements StorageSystem {
 
             Map<DeviceId, DeviceImpl> devices = this.getDevices(nextMap.keySet());
 
-
             for (DeviceId device : nextMap.keySet()) {
 
                 DeviceImpl dev = devices.get(device);
@@ -334,7 +319,7 @@ public class StorageSystemImpl implements StorageSystem {
 
                 Map<DeviceId, ComponentId> destinations = dev.getDestinations();
 
-                for(DeviceId devi : destinations.keySet()) {
+                for (DeviceId devi : destinations.keySet()) {
 
                     LinkedList<ComponentId> newPath = new LinkedList<ComponentId>(path);
 
@@ -350,11 +335,11 @@ public class StorageSystemImpl implements StorageSystem {
 
             canReach.removeAll(visited);
 
-            if(canReach.isEmpty()) {
+            if (canReach.isEmpty()) {
                 break;
             }
 
-            if(canReach.contains(destination)) {
+            if (canReach.contains(destination)) {
 
                 LinkedList<ComponentId> cycle = temp.get(destination);
 
@@ -372,45 +357,47 @@ public class StorageSystemImpl implements StorageSystem {
 
         }
 
-        // TODO: tutaj należy dopisać wybieranie najstarszego z cykli, teraz wyjebane wybieram pierwszy
-
-        // System.out.println(foundCycles);
-
-        if(foundCycles.isEmpty()) {
+        if (foundCycles.isEmpty()) {
             return null;
-        }
-        else {
-
-            int min = Integer.MAX_VALUE;
+        } else {
 
             List<ChooseRightCycleHelperType> iters = new LinkedList<ChooseRightCycleHelperType>();
 
             int helper = 0;
 
-            for(LinkedList<ComponentId> ele : foundCycles) {
-                iters.add(new ChooseRightCycleHelperType(helper, ele.iterator(), source));
+            for (LinkedList<ComponentId> elem : foundCycles) {
+                iters.add(new ChooseRightCycleHelperType(helper, elem.iterator(), source));
                 helper++;
             }
 
-            
-            
-            while (iters.size()>1) {
+            while (iters.size() > 1) {
+
+                int min = Integer.MAX_VALUE;
 
                 List<ChooseRightCycleHelperType> temp = new LinkedList<ChooseRightCycleHelperType>();
 
-                for(ChooseRightCycleHelperType elem: iters) {
+                for (ChooseRightCycleHelperType elem : iters) {
                     DeviceImpl device = devices.get(elem.currentDevice);
-                    int pos = device.whatPositionAmI(elem.iterator.next());
-                    
+                    ComponentId rrr = elem.iterator.next();
+                    int pos = device.whatPositionAmI(rrr);
+
+                    if (pos < min) {
+                        min = pos;
+                        temp.clear();
+                        elem.currentDevice = device.getMapping(rrr);
+                        temp.add(elem);
+                    }
+
+                    if (pos == min) {
+                        elem.currentDevice = device.getMapping(rrr);
+                        temp.add(elem);
+                    }
                 }
 
-                
             }
 
-
-            return foundCycles.get(0);
+            return foundCycles.get(iters.get(0).ogPos);
         }
-
 
     }
 
