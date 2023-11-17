@@ -2,6 +2,7 @@ package cp2023.solution;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -314,11 +315,16 @@ public class StorageSystemImpl implements StorageSystem {
             nextMap.put(dev, path);
         }
 
+        if(nextMap.keySet().contains(destination)) {
+            foundCycles.add(nextMap.get(destination));
+        }
+
         while (true) {
 
             Map<DeviceId, LinkedList<ComponentId>> temp = new HashMap<DeviceId, LinkedList<ComponentId>>();
 
             Map<DeviceId, DeviceImpl> devices = this.getDevices(nextMap.keySet());
+
 
             for (DeviceId device : nextMap.keySet()) {
 
@@ -333,6 +339,7 @@ public class StorageSystemImpl implements StorageSystem {
                     LinkedList<ComponentId> newPath = new LinkedList<ComponentId>(path);
 
                     newPath.add(destinations.get(devi));
+                    // System.out.print(newPath);
 
                     temp.put(devi, newPath);
 
@@ -367,10 +374,40 @@ public class StorageSystemImpl implements StorageSystem {
 
         // TODO: tutaj należy dopisać wybieranie najstarszego z cykli, teraz wyjebane wybieram pierwszy
 
+        // System.out.println(foundCycles);
+
         if(foundCycles.isEmpty()) {
             return null;
         }
         else {
+
+            int min = Integer.MAX_VALUE;
+
+            List<ChooseRightCycleHelperType> iters = new LinkedList<ChooseRightCycleHelperType>();
+
+            int helper = 0;
+
+            for(LinkedList<ComponentId> ele : foundCycles) {
+                iters.add(new ChooseRightCycleHelperType(helper, ele.iterator(), source));
+                helper++;
+            }
+
+            
+            
+            while (iters.size()>1) {
+
+                List<ChooseRightCycleHelperType> temp = new LinkedList<ChooseRightCycleHelperType>();
+
+                for(ChooseRightCycleHelperType elem: iters) {
+                    DeviceImpl device = devices.get(elem.currentDevice);
+                    int pos = device.whatPositionAmI(elem.iterator.next());
+                    
+                }
+
+                
+            }
+
+
             return foundCycles.get(0);
         }
 

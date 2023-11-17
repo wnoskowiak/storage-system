@@ -60,4 +60,24 @@ public class NewQueueImplemetation {
         return result;
     }
 
+    public DeviceId getMapping(ComponentId comp) throws InterruptedException {
+        mutex.acquire();
+        DeviceId result = connections.get(comp);
+        mutex.release();
+        return result;
+    }
+
+    public int whatPos(ComponentId comp) throws InterruptedException {
+        mutex.acquire();
+        int result = 0;
+        for(ComponentId elem : queue.keySet()) {
+            result++;
+            if(elem == comp) {
+                break;
+            }
+        }
+        mutex.release();
+        return result;
+    }
+
 }
