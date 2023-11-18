@@ -55,18 +55,20 @@ public class StorageSystemImpl implements StorageSystem {
 
         Map<DeviceId, Set<ComponentId>> temp = new HashMap<DeviceId, Set<ComponentId>>();
 
-        for (Map.Entry<ComponentId, DeviceId> entry : componentPlacement.entrySet()) {
+        if (componentPlacement != null) {
+            for (Map.Entry<ComponentId, DeviceId> entry : componentPlacement.entrySet()) {
 
-            components.add(entry.getKey());
+                components.add(entry.getKey());
 
-            if (temp.containsKey(entry.getValue())) {
-                temp.get(entry.getValue()).add(entry.getKey());
-                continue;
+                if (temp.containsKey(entry.getValue())) {
+                    temp.get(entry.getValue()).add(entry.getKey());
+                    continue;
+                }
+                Set<ComponentId> setToInsert = new HashSet<ComponentId>();
+                setToInsert.add(entry.getKey());
+                temp.put(entry.getValue(), setToInsert);
+
             }
-            Set<ComponentId> setToInsert = new HashSet<ComponentId>();
-            setToInsert.add(entry.getKey());
-            temp.put(entry.getValue(), setToInsert);
-
         }
 
         for (Map.Entry<DeviceId, Integer> entry : deviceTotalSlots.entrySet()) {
@@ -287,7 +289,7 @@ public class StorageSystemImpl implements StorageSystem {
 
     public LinkedList<ComponentId> lookForCycles(DeviceId source, DeviceId destination) throws InterruptedException {
 
-        Map<DeviceId, LinkedList<ComponentId>> nextMap = new HashMap<DeviceId, LinkedList<ComponentId>>();
+        MultiMap<DeviceId, LinkedList<ComponentId>> nextMap = new MultiMap<DeviceId, LinkedList<ComponentId>>();
 
         List<LinkedList<ComponentId>> foundCycles = new LinkedList<LinkedList<ComponentId>>();
         Set<DeviceId> visited = new HashSet<DeviceId>();
@@ -302,12 +304,18 @@ public class StorageSystemImpl implements StorageSystem {
         }
 
         if (nextMap.keySet().contains(destination)) {
-            foundCycles.add(nextMap.get(destination));
+
+            for (LinkedList<ComponentId> elem : nextMap.get(destination)) {
+
+                foundCycles.add(elem);
+
+            }
+
         }
 
         while (true) {
 
-            Map<DeviceId, LinkedList<ComponentId>> temp = new HashMap<DeviceId, LinkedList<ComponentId>>();
+            MultiMap<DeviceId, LinkedList<ComponentId>> temp = new MultiMap<DeviceId, LinkedList<ComponentId>>();
 
             Map<DeviceId, DeviceImpl> devices = this.getDevices(nextMap.keySet());
 
@@ -315,21 +323,31 @@ public class StorageSystemImpl implements StorageSystem {
 
                 DeviceImpl dev = devices.get(device);
 
-                LinkedList<ComponentId> path = nextMap.get(device);
+                LinkedList<LinkedList<ComponentId>> paths = nextMap.get(device);
 
                 Map<DeviceId, ComponentId> destinations = dev.getDestinations();
 
-                for (DeviceId devi : destinations.keySet()) {
+                // System.out.println(destinations + " " + dev.id);
 
-                    LinkedList<ComponentId> newPath = new LinkedList<ComponentId>(path);
+                for (LinkedList<ComponentId> path : paths) {
 
-                    newPath.add(destinations.get(devi));
-                    // System.out.print(newPath);
+                    for (DeviceId devi : destinations.keySet()) {
 
-                    temp.put(devi, newPath);
+                        LinkedList<ComponentId> newPath = new LinkedList<ComponentId>(path);
 
+                        newPath.add(destinations.get(devi));
+
+                        temp.put(devi, newPath);
+
+                    }
                 }
+
             }
+
+            // for (LinkedList<ComponentId> elem : temp.values()) {
+
+            //     System.out.println(elem);
+            // }
 
             Set<DeviceId> canReach = temp.keySet();
 
@@ -341,13 +359,17 @@ public class StorageSystemImpl implements StorageSystem {
 
             if (canReach.contains(destination)) {
 
-                LinkedList<ComponentId> cycle = temp.get(destination);
+                LinkedList<LinkedList<ComponentId>> cycles = temp.get(destination);
 
-                foundCycles.add(cycle);
+                for (LinkedList<ComponentId> cycle : cycles) {
 
-                temp.remove(destination);
+                    foundCycles.add(cycle);
 
-                canReach.remove(destination);
+                    temp.remove(destination);
+
+                    canReach.remove(destination);
+
+                }
 
             }
 
@@ -360,6 +382,8 @@ public class StorageSystemImpl implements StorageSystem {
         if (foundCycles.isEmpty()) {
             return null;
         } else {
+
+            // System.out.println(foundCycles);
 
             List<ChooseRightCycleHelperType> iters = new LinkedList<ChooseRightCycleHelperType>();
 
@@ -377,9 +401,17 @@ public class StorageSystemImpl implements StorageSystem {
                 List<ChooseRightCycleHelperType> temp = new LinkedList<ChooseRightCycleHelperType>();
 
                 for (ChooseRightCycleHelperType elem : iters) {
+
+                    // System.out.println("=====");
+
                     DeviceImpl device = devices.get(elem.currentDevice);
                     ComponentId rrr = elem.iterator.next();
                     int pos = device.whatPositionAmI(rrr);
+
+                    // System.out.println(device.id);
+                    // System.out.println(rrr);
+                    // System.out.println(pos);
+                    // System.out.println("=====");
 
                     if (pos < min) {
                         min = pos;
@@ -388,11 +420,14 @@ public class StorageSystemImpl implements StorageSystem {
                         temp.add(elem);
                     }
 
-                    if (pos == min) {
+                    else if (pos == min) {
                         elem.currentDevice = device.getMapping(rrr);
                         temp.add(elem);
                     }
+
                 }
+
+                iters = temp;
 
             }
 

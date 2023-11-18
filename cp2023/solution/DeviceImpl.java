@@ -26,7 +26,12 @@ public class DeviceImpl {
     public Semaphore stateMutex = new Semaphore(1);
 
     public DeviceImpl(DeviceId id, int numberOfSlots, Set<ComponentId> initialComponentIds, StorageSystemImpl system) {
+
         if (numberOfSlots <= 0) {
+            throw new IllegalArgumentException();
+        }
+
+        if (numberOfSlots < initialComponentIds.size()) {
             throw new IllegalArgumentException();
         }
         this.numberOfSlots = numberOfSlots;
@@ -169,9 +174,7 @@ public class DeviceImpl {
 
         LinkedHashMap<ComponentId, DeviceId> incoming = queue.getConnections();
 
-        // System.out.println("sranie6 " + incoming + " " + id);
-
-        Map<DeviceId, ComponentId> result = new HashMap<DeviceId, ComponentId>();
+        Map<DeviceId, ComponentId> result = new LinkedHashMap<DeviceId, ComponentId>();
 
         for (ComponentId elem : incoming.keySet()) {
 
