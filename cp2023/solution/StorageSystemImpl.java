@@ -139,15 +139,15 @@ public class StorageSystemImpl implements StorageSystem {
 
             checkConditions.acquire();
 
-            // sprawdzamy czy element musi być transferowany
-            if (transfer.getDestinationDeviceId() != null) {
-                DeviceImpl sourceDev = devices.get(transfer.getDestinationDeviceId());
-                if (sourceDev.doIHave(comp)) {
-                    checkConditions.release();
-                    throw new ComponentDoesNotNeedTransfer(comp,
-                            transfer.getDestinationDeviceId());
-                }
-            }
+            // // sprawdzamy czy element musi być transferowany
+            // if (transfer.getDestinationDeviceId() != null) {
+            //     DeviceImpl destDev = devices.get(transfer.getDestinationDeviceId());
+            //     if (destDev.doIHave(comp)) {
+            //         checkConditions.release();
+            //         throw new ComponentDoesNotNeedTransfer(comp,
+            //                 transfer.getDestinationDeviceId());
+            //     }
+            // }
 
             // sprawdzamy czy transfer dla komponentu został już zgłoszony
             // underTransferMutex.acquire();
@@ -344,11 +344,6 @@ public class StorageSystemImpl implements StorageSystem {
 
             }
 
-            // for (LinkedList<ComponentId> elem : temp.values()) {
-
-            //     System.out.println(elem);
-            // }
-
             Set<DeviceId> canReach = temp.keySet();
 
             canReach.removeAll(visited);
@@ -402,16 +397,9 @@ public class StorageSystemImpl implements StorageSystem {
 
                 for (ChooseRightCycleHelperType elem : iters) {
 
-                    // System.out.println("=====");
-
                     DeviceImpl device = devices.get(elem.currentDevice);
                     ComponentId rrr = elem.iterator.next();
                     int pos = device.whatPositionAmI(rrr);
-
-                    // System.out.println(device.id);
-                    // System.out.println(rrr);
-                    // System.out.println(pos);
-                    // System.out.println("=====");
 
                     if (pos < min) {
                         min = pos;

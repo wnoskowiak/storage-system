@@ -19,7 +19,7 @@ public class DeviceImpl {
 
     public final NewQueueImplemetation queue = new NewQueueImplemetation();
 
-    private Integer free = 0;
+    private final LinkedList<Semaphore> free = new LinkedList<Semaphore>();
 
     public final ArriveOrReserve arriveOrReserve = new ArriveOrReserve();
     public final AddOrRemove addOrRemove = new AddOrRemove();
@@ -31,18 +31,22 @@ public class DeviceImpl {
             throw new IllegalArgumentException();
         }
 
-        if (numberOfSlots < initialComponentIds.size()) {
-            throw new IllegalArgumentException();
-        }
         this.numberOfSlots = numberOfSlots;
         this.system = system;
         this.id = id;
 
         if (initialComponentIds != null) {
+
+            if (numberOfSlots < initialComponentIds.size()) {
+                throw new IllegalArgumentException();
+            }
+
             memory.addAll(initialComponentIds);
         }
 
-        free = this.numberOfSlots - memory.size();
+        for (int i = 0; i < this.numberOfSlots - memory.size(); i++) {
+            free.add(new Semaphore(1));
+        }
 
     }
 
@@ -86,9 +90,10 @@ public class DeviceImpl {
         public Semaphore releaseOldest() throws InterruptedException {
             stateMutex.acquire();
             if (queue.size() == 0) {
-                free++;
+                Semaphore result = new Semaphore(0);
+                free.add(result);
                 stateMutex.release();
-                return new Semaphore(0);
+                return result;
             } else {
                 NewQueueElement elem = queue.popLast();
                 elem.waitForCondition.release();
@@ -99,13 +104,17 @@ public class DeviceImpl {
 
         public Semaphore releaseSpecific(LinkedList<ComponentId> cycleRemainder) throws InterruptedException {
             stateMutex.acquire();
+            // if (cycleRemainder == null) {
+            //     stateMutex.release();
+            //     return releaseOldest();
+            // }
             if (cycleRemainder.size() == 0) {
                 stateMutex.release();
                 return new Semaphore(1);
             } else {
-                ComponentId myBoi = cycleRemainder.getFirst();
+                ComponentId comp = cycleRemainder.getFirst();
                 cycleRemainder.remove();
-                NewQueueElement elem = queue.popSpecific(myBoi);
+                NewQueueElement elem = queue.popSpecific(comp);
                 elem.cycleRemainders.list = cycleRemainder;
                 elem.waitForCondition.release();
                 stateMutex.release();
@@ -117,9 +126,9 @@ public class DeviceImpl {
 
         public AdditionMutexWrapper reserveForAddition(ComponentId comp) throws InterruptedException {
             stateMutex.acquire();
-            if (free > 0) {
-                free--;
-                AdditionMutexWrapper result = new AdditionMutexWrapper(new Semaphore(1), new Semaphore(1));
+            if (free.size() > 0) {
+                Semaphore prepSem = free.remove();
+                AdditionMutexWrapper result = new AdditionMutexWrapper(new Semaphore(1), prepSem);
                 stateMutex.release();
                 return result;
             } else {
@@ -132,37 +141,28 @@ public class DeviceImpl {
 
         public TransferMutexWrapper reserveForTransfer(ComponentId comp, DeviceId source) throws InterruptedException {
             stateMutex.acquire();
-            if (free > 0) {
-                free--;
+            if (free.size() > 0) {
+                Semaphore prepSem = free.remove();
                 TransferMutexWrapper result = new TransferMutexWrapper(new LinkedListWrapper(null), new Semaphore(1),
-                        new Semaphore(1));
+                        prepSem);
                 stateMutex.release();
-                // System.out.println("Transferer " + Thread.currentThread().getId() + " 1");
                 return result;
             } else {
-                // tu trzeba sprawdzić czy cykl istnieje
                 LinkedList<ComponentId> cycle = system.lookForCycles(source, id);
                 if (cycle != null) {
-                    // tu robimy rozcyklowywanie
                     NewQueueElement qElem = queue.put(comp);
                     cycle.add(comp);
                     TransferMutexWrapper result = new TransferMutexWrapper(new LinkedListWrapper(cycle),
                             new Semaphore(1),
                             qElem.doneWithPrepare);
                     stateMutex.release();
-                    // System.out.println("Transferer " + Thread.currentThread().getId() + " 2");
                     return result;
                 } else {
                     NewQueueElement qElem = queue.put(comp);
-                    // System.out.println("putting connection " + id);
                     queue.putConnection(comp, source);
-                    // System.out.println(queue.getConnections().toString() + " " + id.toString());
-                    // System.out.println(queue.getConnections().toString() + " " + id.toString());
                     TransferMutexWrapper result = new TransferMutexWrapper(qElem.cycleRemainders,
                             qElem.waitForCondition, qElem.doneWithPrepare);
                     stateMutex.release();
-                    // System.out.println("Transferer " + Thread.currentThread().getId() + " 3 " +
-                    // qElem.cycleRemainders);
                     return result;
                 }
             }
