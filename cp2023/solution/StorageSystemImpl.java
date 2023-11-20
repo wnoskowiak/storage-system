@@ -113,7 +113,6 @@ public class StorageSystemImpl implements StorageSystem {
 
             checkConditions.acquire();
 
-
             // sprawdzamy czy transfer dla komponentu został już zgłoszony
             if (underTransfer.contains(comp)) {
                 checkConditions.release();
@@ -142,8 +141,15 @@ public class StorageSystemImpl implements StorageSystem {
 
             if (opType == operation.INSERT) {
                 if (components.contains(comp)) {
+                    DeviceId host = null;
+                    for(DeviceImpl dev: devices.values()) {
+                        if(dev.doIHave(comp)) {
+                            host = dev.id;
+                            break;
+                        }
+                    }
                     checkConditions.release();
-                    throw new ComponentAlreadyExists(comp);
+                    throw new ComponentAlreadyExists(comp, host);
                 }
             }
 
@@ -221,7 +227,7 @@ public class StorageSystemImpl implements StorageSystem {
                     transfer.perform();
                     // Usuwamy element zurządzenia
                     sourceDev.addOrRemove.remove(comp);
-                    // Dodajemy element do urządzenia
+                    // Dodajemy element do urząd        //  System.out.println("-------");zenia
                     destDev.addOrRemove.add(comp);
 
                     break;

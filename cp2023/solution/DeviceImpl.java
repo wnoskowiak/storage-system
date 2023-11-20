@@ -1,6 +1,5 @@
 package cp2023.solution;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -17,7 +16,7 @@ public class DeviceImpl {
     private final StorageSystemImpl system;
     private final Set<ComponentId> memory = new HashSet<ComponentId>();
 
-    public final NewQueueImplemetation queue = new NewQueueImplemetation();
+    public final QueueImplemetation queue = new QueueImplemetation();
 
     private final LinkedList<Semaphore> free = new LinkedList<Semaphore>();
 
@@ -96,7 +95,7 @@ public class DeviceImpl {
                     stateMutex.release();
                     return result;
                 } else {
-                    NewQueueElement elem = queue.popLast();
+                    QueueElement elem = queue.popLast();
                     elem.waitForCondition.release();
                     stateMutex.release();
                     return elem.doneWithPrepare;
@@ -108,7 +107,7 @@ public class DeviceImpl {
             } else {
                 ComponentId comp = cycleRemainder.getFirst();
                 cycleRemainder.remove();
-                NewQueueElement elem = queue.popSpecific(comp);
+                QueueElement elem = queue.popSpecific(comp);
                 elem.cycleRemainders.list = cycleRemainder;
                 elem.waitForCondition.release();
                 stateMutex.release();
@@ -126,7 +125,7 @@ public class DeviceImpl {
                 stateMutex.release();
                 return result;
             } else {
-                NewQueueElement qElem = queue.put(comp);
+                QueueElement qElem = queue.put(comp);
                 AdditionMutexWrapper result = new AdditionMutexWrapper(qElem.waitForCondition, qElem.doneWithPrepare);
                 stateMutex.release();
                 return result;
@@ -144,7 +143,7 @@ public class DeviceImpl {
             } else {
                 LinkedList<ComponentId> cycle = system.lookForCycles(source, id);
                 if (cycle != null) {
-                    NewQueueElement qElem = queue.put(comp);
+                    QueueElement qElem = queue.put(comp);
                     cycle.add(comp);
                     TransferMutexWrapper result = new TransferMutexWrapper(new LinkedListWrapper(cycle),
                             new Semaphore(1),
@@ -152,7 +151,7 @@ public class DeviceImpl {
                     stateMutex.release();
                     return result;
                 } else {
-                    NewQueueElement qElem = queue.put(comp);
+                    QueueElement qElem = queue.put(comp);
                     queue.putConnection(comp, source);
                     TransferMutexWrapper result = new TransferMutexWrapper(qElem.cycleRemainders,
                             qElem.waitForCondition, qElem.doneWithPrepare);

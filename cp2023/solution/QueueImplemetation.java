@@ -6,10 +6,10 @@ import java.util.concurrent.Semaphore;
 import cp2023.base.ComponentId;
 import cp2023.base.DeviceId;
 
-public class NewQueueImplemetation {
+public class QueueImplemetation {
 
     private final Semaphore mutex = new Semaphore(1);
-    private final LinkedHashMap<ComponentId, NewQueueElement> queue = new LinkedHashMap<ComponentId, NewQueueElement>();
+    private final LinkedHashMap<ComponentId, QueueElement> queue = new LinkedHashMap<ComponentId, QueueElement>();
     private final LinkedHashMap<ComponentId, DeviceId> connections = new LinkedHashMap<ComponentId, DeviceId>();
 
     public int size() throws InterruptedException {
@@ -19,10 +19,10 @@ public class NewQueueImplemetation {
         return result;
     }
 
-    public NewQueueElement popLast() throws InterruptedException {
+    public QueueElement popLast() throws InterruptedException {
         mutex.acquire();
         ComponentId component = queue.keySet().iterator().next();
-        NewQueueElement result = queue.get(component);
+        QueueElement result = queue.get(component);
         connections.remove(component);
         queue.remove(component);
         mutex.release();
@@ -30,18 +30,18 @@ public class NewQueueImplemetation {
 
     }
 
-    public NewQueueElement popSpecific(ComponentId component) throws InterruptedException {
+    public QueueElement popSpecific(ComponentId component) throws InterruptedException {
         mutex.acquire();
-        NewQueueElement result = queue.get(component);
+        QueueElement result = queue.get(component);
         connections.remove(component);
         queue.remove(component);
         mutex.release();
         return result;
     }
 
-    public NewQueueElement put(ComponentId comp) throws InterruptedException {
+    public QueueElement put(ComponentId comp) throws InterruptedException {
         mutex.acquire();
-        NewQueueElement result = new NewQueueElement();
+        QueueElement result = new QueueElement();
         queue.put(comp, result);
         mutex.release();
         return result;
