@@ -43,9 +43,7 @@ public class StorageSystemImpl implements StorageSystem {
 
     private final Map<DeviceId, DeviceImpl> devices;
     private final Set<ComponentId> components;
-    private final Semaphore componentMutex = new Semaphore(1, true);
     private final Set<ComponentId> underTransfer = new HashSet<ComponentId>();
-    // private final Semaphore underTransferMutex = new Semaphore(1, true);
 
     public StorageSystemImpl(Map<DeviceId, Integer> deviceTotalSlots,
             Map<ComponentId, DeviceId> componentPlacement) {
@@ -87,30 +85,6 @@ public class StorageSystemImpl implements StorageSystem {
         return result;
     }
 
-    public void acquireMutex() throws InterruptedException {
-
-        componentMutex.acquire();
-
-    }
-
-    public void releaseMutex() {
-
-        componentMutex.release();
-
-    }
-
-    public void addComponent(ComponentId comp) {
-        components.add(comp);
-    }
-
-    public void removeComponents(ComponentId comp) {
-        components.remove(comp);
-    }
-
-    public boolean doIHaveComponent(ComponentId comp) {
-        return components.contains(comp);
-    }
-
     public void execute(ComponentTransfer transfer) throws TransferException {
 
         try {
@@ -139,25 +113,13 @@ public class StorageSystemImpl implements StorageSystem {
 
             checkConditions.acquire();
 
-            // // sprawdzamy czy element musi być transferowany
-            // if (transfer.getDestinationDeviceId() != null) {
-            //     DeviceImpl destDev = devices.get(transfer.getDestinationDeviceId());
-            //     if (destDev.doIHave(comp)) {
-            //         checkConditions.release();
-            //         throw new ComponentDoesNotNeedTransfer(comp,
-            //                 transfer.getDestinationDeviceId());
-            //     }
-            // }
 
             // sprawdzamy czy transfer dla komponentu został już zgłoszony
-            // underTransferMutex.acquire();
             if (underTransfer.contains(comp)) {
-                // underTransferMutex.release();
                 checkConditions.release();
                 throw new ComponentIsBeingOperatedOn(comp);
             }
             underTransfer.add(comp);
-            // underTransferMutex.release();
 
             operation opType;
             DeviceImpl sourceDev = devices.getOrDefault(transfer.getSourceDeviceId(), null);
@@ -179,24 +141,18 @@ public class StorageSystemImpl implements StorageSystem {
             }
 
             if (opType == operation.INSERT) {
-                // componentMutex.acquire();
                 if (components.contains(comp)) {
-                    // componentMutex.release();
                     checkConditions.release();
                     throw new ComponentAlreadyExists(comp);
                 }
-                // componentMutex.release();
             }
 
             if (opType == operation.TRANSFER) {
 
-                // componentMutex.acquire();
                 if (destDev.doIHave(comp)) {
-                    // componentMutex.release();
                     checkConditions.release();
                     throw new ComponentDoesNotNeedTransfer(comp, destDev.id);
                 }
-                // componentMutex.release();
             }
 
             switch (opType) {
@@ -206,7 +162,7 @@ public class StorageSystemImpl implements StorageSystem {
                     // zostały spełnione
                     checkConditions.release();
                     // informujemy inny wątek że można zaczynać
-                    Semaphore deleteDonePreparing = sourceDev.arriveOrReserve.releaseOldest();
+                    Semaphore deleteDonePreparing = sourceDev.arriveOrReserve.release(null);
                     // przygotowywujemy transfer
                     transfer.prepare();
                     // informujemy czekający wątek że wykonaliśmy prepare
@@ -253,13 +209,8 @@ public class StorageSystemImpl implements StorageSystem {
                     // Czekamy aż będziemy mogli rozpocząć prepare
                     transferMutexes.canStartPrep.acquire();
                     // informujemy inny wątek że można zaczynać, z uwzględneniem cyklowania
-                    Semaphore transferDonePreparing;
-                    if (transferMutexes.cycleRemainder.list == null) {
-                        transferDonePreparing = sourceDev.arriveOrReserve.releaseOldest();
-                    } else {
-                        transferDonePreparing = sourceDev.arriveOrReserve
-                                .releaseSpecific(transferMutexes.cycleRemainder.list);
-                    }
+                    Semaphore transferDonePreparing = sourceDev.arriveOrReserve
+                            .release(transferMutexes.cycleRemainder.list);
                     // rozpoczynamy transfer
                     transfer.prepare();
                     // informujemy czekający wątek że wykonaliśmy prepare
@@ -327,8 +278,6 @@ public class StorageSystemImpl implements StorageSystem {
 
                 Map<DeviceId, ComponentId> destinations = dev.getDestinations();
 
-                // System.out.println(destinations + " " + dev.id);
-
                 for (LinkedList<ComponentId> path : paths) {
 
                     for (DeviceId devi : destinations.keySet()) {
@@ -377,8 +326,6 @@ public class StorageSystemImpl implements StorageSystem {
         if (foundCycles.isEmpty()) {
             return null;
         } else {
-
-            // System.out.println(foundCycles);
 
             List<ChooseRightCycleHelperType> iters = new LinkedList<ChooseRightCycleHelperType>();
 

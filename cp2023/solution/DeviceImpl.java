@@ -87,27 +87,21 @@ public class DeviceImpl {
 
     public class ArriveOrReserve {
 
-        public Semaphore releaseOldest() throws InterruptedException {
+        public Semaphore release(LinkedList<ComponentId> cycleRemainder) throws InterruptedException {
             stateMutex.acquire();
-            if (queue.size() == 0) {
-                Semaphore result = new Semaphore(0);
-                free.add(result);
-                stateMutex.release();
-                return result;
-            } else {
-                NewQueueElement elem = queue.popLast();
-                elem.waitForCondition.release();
-                stateMutex.release();
-                return elem.doneWithPrepare;
+            if (cycleRemainder == null) {
+                if (queue.size() == 0) {
+                    Semaphore result = new Semaphore(0);
+                    free.add(result);
+                    stateMutex.release();
+                    return result;
+                } else {
+                    NewQueueElement elem = queue.popLast();
+                    elem.waitForCondition.release();
+                    stateMutex.release();
+                    return elem.doneWithPrepare;
+                }
             }
-        }
-
-        public Semaphore releaseSpecific(LinkedList<ComponentId> cycleRemainder) throws InterruptedException {
-            stateMutex.acquire();
-            // if (cycleRemainder == null) {
-            //     stateMutex.release();
-            //     return releaseOldest();
-            // }
             if (cycleRemainder.size() == 0) {
                 stateMutex.release();
                 return new Semaphore(1);

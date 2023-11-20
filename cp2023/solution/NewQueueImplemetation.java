@@ -70,17 +70,12 @@ public class NewQueueImplemetation {
     public int whatPos(ComponentId comp) throws InterruptedException {
         mutex.acquire();
         int result = 0;
-        // System.out.println("-------");
         for(ComponentId elem : queue.keySet()) {
             result++;
-            // System.out.println(elem);
-
             if(elem == comp) {
-                // System.out.println("properBreak");
                 break;
             }
         }
-        //  System.out.println("-------");
         mutex.release();
         return result;
     }
