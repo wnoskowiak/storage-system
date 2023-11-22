@@ -30,6 +30,10 @@ public class DeviceImpl {
             throw new IllegalArgumentException();
         }
 
+        if (id == null) {
+            throw new IllegalArgumentException();
+        }
+
         this.numberOfSlots = numberOfSlots;
         this.system = system;
         this.id = id;
@@ -49,6 +53,13 @@ public class DeviceImpl {
 
     }
 
+    /**
+     * Sprawdzamy czy urządzenie zawiera zadany element w pamięci
+     * 
+     * @param elem : id elementu do sprawdzenia
+     * @return : boolean określający obecność elementu
+     * @throws InterruptedException
+     */
     public boolean doIHave(ComponentId elem) throws InterruptedException {
 
         stateMutex.acquire();
@@ -60,22 +71,48 @@ public class DeviceImpl {
         return result;
     }
 
+    /**
+     * Sprawdzamy na której pozycji w kolejce stoi element o zadanym id
+     * 
+     * @param comp : id elementu do sprawdzenia
+     * @return : int określający pozycje elementu
+     * @throws InterruptedException
+     */
     public int whatPositionAmI(ComponentId comp) throws InterruptedException {
         return queue.whatPos(comp);
     }
 
+    /**
+     * Sprawdzamy na miejsce na którym urządzeniu czeka transfer o podanym id
+     * 
+     * @param comp : id elementu do sprawdzenia
+     * @return Id urządzenia na którym na miejsce czeka transfer
+     * @throws InterruptedException
+     */
     public DeviceId getMapping(ComponentId comp) throws InterruptedException {
         return queue.getMapping(comp);
     };
 
     public class AddOrRemove {
 
+        /**
+         * Dodajemy element to pamięci urządzenia
+         * 
+         * @param elem : id elementu do dodania
+         * @throws InterruptedException
+         */
         public void remove(ComponentId elem) throws InterruptedException {
             stateMutex.acquire();
             memory.remove(elem);
             stateMutex.release();
         }
 
+        /**
+         * Usuwamy element z pamięci urządzenia
+         * 
+         * @param comp
+         * @throws InterruptedException
+         */
         public void add(ComponentId comp) throws InterruptedException {
             stateMutex.acquire();
             memory.add(comp);
@@ -117,6 +154,15 @@ public class DeviceImpl {
 
         }
 
+        /**
+         * Rezerwujemy miejsce na urządzeniu docelowym
+         * 
+         * @param comp   : id transferowonego komponentu
+         * @param source : urządzenie źródłowe
+         * @param op     : typ wykonywanej operacji
+         * @return wrapper mutexów na które należy zaczekać
+         * @throws InterruptedException
+         */
         public AdditionMutexWrapper reserveForAddition(ComponentId comp) throws InterruptedException {
             stateMutex.acquire();
             if (free.size() > 0) {
@@ -132,6 +178,15 @@ public class DeviceImpl {
             }
         }
 
+        /**
+         * Rezerwujemy miejsce na urządzeniu docelowym
+         * 
+         * @param comp   : id transferowonego komponentu
+         * @param source : urządzenie źródłowe
+         * @param op     : typ wykonywanej operacji
+         * @return wrapper mutexów na które należy zaczekać
+         * @throws InterruptedException
+         */
         public TransferMutexWrapper reserveForTransfer(ComponentId comp, DeviceId source) throws InterruptedException {
             stateMutex.acquire();
             if (free.size() > 0) {
@@ -163,6 +218,13 @@ public class DeviceImpl {
 
     }
 
+    /**
+     * Odczytujemy transfery oczekujące na miejsce na urządzeniu
+     * 
+     * @return mapa określająca połączenia - kluczami są urządzenia z których
+     *         transfery próbują przenieść elementy a wartościami id tych elementów
+     * @throws InterruptedException
+     */
     public Map<DeviceId, ComponentId> getDestinations() throws InterruptedException {
 
         LinkedHashMap<ComponentId, DeviceId> incoming = queue.getConnections();

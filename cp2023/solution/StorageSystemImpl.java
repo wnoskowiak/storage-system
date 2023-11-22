@@ -204,8 +204,6 @@ public class StorageSystemImpl implements StorageSystem {
 
                 case TRANSFER:
 
-                    // tu trzeba będzie sprawdzić cykle
-
                     // Rezerwujemy miejsce na urządzeniu
                     TransferMutexWrapper transferMutexes = destDev.arriveOrReserve.reserveForTransfer(comp,
                             sourceDev.id);
@@ -226,7 +224,7 @@ public class StorageSystemImpl implements StorageSystem {
                     transfer.perform();
                     // Usuwamy element zurządzenia
                     sourceDev.addOrRemove.remove(comp);
-                    // Dodajemy element do urząd        //  System.out.println("-------");zenia
+                    // Dodajemy element do urząd      
                     destDev.addOrRemove.add(comp);
 
                     break;
@@ -243,6 +241,13 @@ public class StorageSystemImpl implements StorageSystem {
 
     }
 
+    /**
+     * Wyszukujemy cykli w w systemie domykanych przez zadany transfer 
+     * @param source : urządzenie źródłowe
+     * @param destination : urządzenie docelowe
+     * @return null jeśli cyklu nie ma, lista elementów reprezentująca lokalnie najstarszy cykl
+     * @throws InterruptedException
+     */
     public LinkedList<ComponentId> lookForCycles(DeviceId source, DeviceId destination) throws InterruptedException {
 
         MultiMap<DeviceId, LinkedList<ComponentId>> nextMap = new MultiMap<DeviceId, LinkedList<ComponentId>>();
